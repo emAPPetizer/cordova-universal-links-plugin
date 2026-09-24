@@ -11,6 +11,7 @@
 #import "CDVPluginResult+CULPlugin.h"
 #import "CDVInvokedUrlCommand+CULPlugin.h"
 #import "CULConfigJsonParser.h"
+#import <Cordova/CDVPluginNotifications.h>
 
 @interface CULPlugin() {
     NSArray *_supportedHosts;
@@ -20,12 +21,58 @@
 
 @end
 
+/**
+ *  Plugin instance created by CDVViewController; nil until the web view has loaded.
+ */
+static __weak CULPlugin *sharedPlugin;
+
+/**
+ *  Universal Link received before the plugin was created (cold launch), replayed in pluginInitialize.
+ */
+static NSUserActivity *pendingUserActivity;
+
 @implementation CULPlugin
 
 #pragma mark Public API
 
+/**
+ *  cordova-ios 8+ uses the UIScene lifecycle: UIKit no longer calls
+ *  application:continueUserActivity:restorationHandler: on the AppDelegate. CDVSceneDelegate
+ *  posts CDVPluginContinueUserActivityNotification instead, so listen for it from process launch.
+ */
++ (void)load {
+    [[NSNotificationCenter defaultCenter] addObserverForName:CDVPluginContinueUserActivityNotification
+                                                      object:nil
+                                                       queue:nil
+                                                  usingBlock:^(NSNotification *notification) {
+        [CULPlugin handleSceneUserActivity:notification.object];
+    }];
+}
+
++ (void)handleSceneUserActivity:(NSUserActivity *)userActivity {
+    // ignore activities that are not for Universal Links
+    if (![userActivity isKindOfClass:[NSUserActivity class]] ||
+        ![userActivity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb] ||
+        userActivity.webpageURL == nil) {
+        return;
+    }
+
+    CULPlugin *plugin = sharedPlugin;
+    if (plugin == nil) {
+        pendingUserActivity = userActivity;
+        return;
+    }
+
+    [plugin handleUserActivity:userActivity];
+}
+
 - (void)pluginInitialize {
     [self localInit];
+    sharedPlugin = self;
+    if (pendingUserActivity) {
+        [self handleUserActivity:pendingUserActivity];
+        pendingUserActivity = nil;
+    }
     // Can be used for testing.
     // Just uncomment, close the app and reopen it. That will simulate application launch from the link.
 //    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onResume:) name:UIApplicationWillEnterForegroundNotification object:nil];
