@@ -35,4 +35,12 @@
  */
 - (BOOL)handleUserActivity:(NSUserActivity *)userActivity;
 
+/**
+ *  Handle a Universal Link delivered through the UIScene lifecycle (cordova-ios 8+).
+ *  If the plugin is not created yet (cold launch), the link is kept until pluginInitialize.
+ *
+ *  @param userActivity object with information about the application launch
+ */
++ (void)handleSceneUserActivity:(NSUserActivity *)userActivity;
+
 @end
